@@ -10,6 +10,7 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
@@ -32,17 +33,6 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Objects;
 import android.graphics.Rect;
-import android.view.Display;
-
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.DisplayCutoutCompat;
-import android.content.res.Configuration;
-import android.view.Surface;
-import android.view.WindowManager;
-import android.content.Context;
-import android.view.WindowInsets;
 
 import org.json.JSONArray;
 import androidx.annotation.NonNull;
@@ -51,7 +41,7 @@ import androidx.annotation.NonNull;
  * FlutterUxcamPlugin
  */
 public class FlutterUxcamPlugin implements MethodCallHandler, FlutterPlugin, ActivityAware {
-    private static final String TYPE_VERSION = "2.7.6";
+    private static final String TYPE_VERSION = "2.7.10";
     public static final String TAG = "FlutterUXCam";
     public static final String USER_APP_KEY = "userAppKey";
     public static final String ENABLE_INTEGRATION_LOGGING = "enableIntegrationLogging";
@@ -79,50 +69,19 @@ public class FlutterUxcamPlugin implements MethodCallHandler, FlutterPlugin, Act
 
     private CrossPlatformDelegate delegate;
 
-    private int leftPadding;
-    private int cutoutTop = 0;
-    private int cutoutBottom = 0;
-    private Insets systemBars = Insets.NONE;
-    private boolean hasNotch = false;
-
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private MethodChannel occlusionRequestChannel;
+    private BinaryMessenger binaryMessenger;
+    private boolean occlusionListenerAttached = false;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
         //general method channel for native and flutter communication
-        final MethodChannel channel = new MethodChannel(binding.getBinaryMessenger(), "flutter_uxcam");
+        binaryMessenger = binding.getBinaryMessenger();
+        final MethodChannel channel = new MethodChannel(binaryMessenger, "flutter_uxcam");
         channel.setMethodCallHandler(this);
 
         delegate = UXCam.getDelegate();
-        occlusionRequestChannel = new MethodChannel(binding.getBinaryMessenger(), "uxcam_occlusion_request");
-
-        delegate.setListener(new OcclusionRectRequestListener() {
-            @Override
-            public void requestOcclusionRects(OcclusionReadyCallback callback) {
-                final long requestStartMs = System.currentTimeMillis();
-
-                mainHandler.post(() -> {
-                    occlusionRequestChannel.invokeMethod("requestOcclusionRects", null, new Result() {
-                        @Override
-                        public void success(Object result) {
-                            List<Rect> rects = parseRectsFromFlutter(result);
-                            callback.onRectsReady(rects);
-                        }
-
-                        @Override
-                        public void error(String errorCode, String errorMessage, Object errorDetails) {
-                            callback.onRectsReady(Collections.emptyList());
-                        }
-
-                        @Override
-                        public void notImplemented() {
-                            callback.onRectsReady(Collections.emptyList());
-                        }
-                    });
-                });
-            }
-        });
     }
 
     @SuppressWarnings("unchecked")
@@ -167,53 +126,6 @@ public class FlutterUxcamPlugin implements MethodCallHandler, FlutterPlugin, Act
     @Override
     public void onAttachedToActivity(ActivityPluginBinding activityPluginBinding) {
         activity = activityPluginBinding.getActivity();
-        ViewCompat.setOnApplyWindowInsetsListener(activity.getWindow().getDecorView(), (v, i) -> {
-            WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(activity.getWindow().getDecorView());
-            if (insets != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    WindowInsets insets1 = activity.getWindow()
-                        .getDecorView()
-                        .getRootWindowInsets();
-                    if (insets1 != null) {
-                        DisplayCutoutCompat cutout = insets.getDisplayCutout();
-                        if (cutout != null && cutout.getBoundingRects() != null && !cutout.getBoundingRects().isEmpty()) {
-                            hasNotch = true;
-                        }
-                    }
-                }
-                DisplayCutoutCompat cutout = insets.getDisplayCutout();
-                if (cutout != null) {
-                    cutoutTop = cutout.getSafeInsetTop();
-                    cutoutBottom = cutout.getSafeInsetBottom();
-                }
-            }
-            int orientation = activity.getResources().getConfiguration().orientation;
-            if(orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                Display display = ((WindowManager) activity.getSystemService(Context.WINDOW_SERVICE))
-                      .getDefaultDisplay();
-                int rotation = display.getRotation();
-                if(rotation == Surface.ROTATION_90) {
-                    int topInset = systemBars.left;
-                    if (hasNotch) {
-                        topInset = systemBars.top;
-                    }
-                    systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                    Log.d("bars","landscape_90" + systemBars.toString());
-                    leftPadding = Math.max(topInset, cutoutTop);
-                } else if (rotation == Surface.ROTATION_270) {
-                    systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                    Log.d("bars","landscape_270" + systemBars.toString());
-                    leftPadding = Math.max(systemBars.left, cutoutBottom);
-                }
-            } else {
-                if(insets!=null) {
-                    systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                }
-                Log.d("bars","portrait" + systemBars.toString());
-                leftPadding = 0;
-            }
-            return ViewCompat.onApplyWindowInsets(v, insets);
-        });
     }
 
     @Override
@@ -233,6 +145,9 @@ public class FlutterUxcamPlugin implements MethodCallHandler, FlutterPlugin, Act
     public void onMethodCall(MethodCall call, Result result) {
         if (call.method.equals("getPlatformVersion")) {
             result.success("Android " + Build.VERSION.RELEASE);
+        } else if (call.method.equals("registerEngine")) {
+            attachOcclusionListenerIfNeeded();
+            result.success(true);
         } else if (call.method.equals("startWithKey")) {
             String key = call.argument("key");
             UXCam.startApplicationWithKeyForCordova(activity, key);
@@ -435,6 +350,38 @@ public class FlutterUxcamPlugin implements MethodCallHandler, FlutterPlugin, Act
         else {
             result.notImplemented();
         }
+    }
+
+    private void attachOcclusionListenerIfNeeded() {
+        if (occlusionListenerAttached) return;
+        if (binaryMessenger == null) return;
+
+        occlusionRequestChannel = new MethodChannel(binaryMessenger, "uxcam_occlusion_request");
+        delegate.setListener(new OcclusionRectRequestListener() {
+            @Override
+            public void requestOcclusionRects(OcclusionReadyCallback callback) {
+                mainHandler.post(() -> {
+                    occlusionRequestChannel.invokeMethod("requestOcclusionRects", null, new Result() {
+                        @Override
+                        public void success(Object result) {
+                            List<Rect> rects = parseRectsFromFlutter(result);
+                            callback.onRectsReady(rects);
+                        }
+
+                        @Override
+                        public void error(String errorCode, String errorMessage, Object errorDetails) {
+                            callback.onRectsReady(Collections.emptyList());
+                        }
+
+                        @Override
+                        public void notImplemented() {
+                            callback.onRectsReady(Collections.emptyList());
+                        }
+                    });
+                });
+            }
+        });
+        occlusionListenerAttached = true;
     }
 
     private void startWithConfig(Map<String, Object> configMap, Result callback) {
