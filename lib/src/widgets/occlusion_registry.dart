@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../internal/motion_reporter.dart';
 import 'occlusion_models.dart';
 
 class OcclusionRegistry with WidgetsBindingObserver {
@@ -27,8 +29,12 @@ class OcclusionRegistry with WidgetsBindingObserver {
 
   void _setupMethodChannelHandler() {
     _requestChannel.setMethodCallHandler(_handleMethodCall);
-    _requestChannelIOS.setMethodCallHandler(_handleMethodCall);
+    if (!kIsWeb) {
+      _requestChannelIOS.setMethodCallHandler(_handleMethodCall);
+    }
   }
+
+  List<Map<String, dynamic>> getOcclusionRects() => _handleCachedRectsRequest();
 
   void _setupPersistentFrameCallback() {
     SchedulerBinding.instance.addPersistentFrameCallback(_onFrame);
@@ -51,16 +57,25 @@ class OcclusionRegistry with WidgetsBindingObserver {
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'requestOcclusionRects':
+        _markNativeRecordingRequested();
         return _handleCachedRectsRequest();
       case 'requestAllOcclusionRects': //Currently iOS only
+        _markNativeRecordingRequested();
         return _handleCachedRectsRequest();
-      case 'pauseRendering':  //Currently iOS only
+      case 'pauseRendering': //Currently iOS only
+        _markNativeRecordingRequested();
         return true;
       default:
         throw PlatformException(
           code: 'UNSUPPORTED',
           message: 'Method ${call.method} not supported',
         );
+    }
+  }
+
+  void _markNativeRecordingRequested() {
+    if (!kIsWeb && Platform.isIOS) {
+      MotionReporter.instance.markRecordingRequested();
     }
   }
 
@@ -76,8 +91,7 @@ class OcclusionRegistry with WidgetsBindingObserver {
       if (entry.attached) {
         final box = entry.box;
         if (box == null || !box.attached || !box.hasSize) {
-          final canUseCache =
-              entry.lastBounds != null &&
+          final canUseCache = entry.lastBounds != null &&
               (requestTimestamp - entry.lastUpdatedMs) <= _detachedTtlMs;
           if (canUseCache) {
             final rectData = _rectDataFromEntry(entry, entry.lastBounds!);
@@ -154,7 +168,7 @@ class OcclusionRegistry with WidgetsBindingObserver {
 
   Map<String, dynamic> _rectDataFromEntry(_OcclusionEntry entry, Rect bounds) {
     final dpr = entry.devicePixelRatio ?? 1.0;
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       return {
         'x0': bounds.left.toInt(),
         'y0': bounds.top.toInt(),

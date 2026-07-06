@@ -2,6 +2,10 @@
 
 | Version      | Changes                                                                                                                                                                                                                                                                                                                                                              |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.8.3        | Updated iOS SDK to 3.8.3 and Android SDK to 3.10.3
+| 2.8.2        | Updated Android SDK to 3.10.2
+| 2.8.1        | Updated iOS SDK to 3.8.2 and Android SDK to 3.10.1
+| 2.8.0        | Added support for Flutter Web<br/> Updated iOS SDK to 3.8.1 and Android SDK to 3.10.0
 | 2.7.13        | Updated iOS SDK to 3.8.0 and Android SDK to 3.9.1
 | 2.7.12        | Updated iOS SDK to 3.7.12 and Android SDK to 3.9.0
 | 2.7.11        | Updated iOS SDK to 3.7.11 and Android SDK to 3.8.14
