@@ -1,7 +1,13 @@
 ## Changelog
 
-| Version      | Changes                                                                                                                                                                                                                                                                                                                                                              |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Version      | Changes                                |
+|---------------|--|
+| 2.10.1        | Updated iOS SDK to 3.11.0 and Android SDK to 3.10.10
+| 2.10.0        | Updated iOS SDK to 3.10.3 and Android SDK to 3.10.9
+|               | Support for capture Screen Frame apart from native.
+| 2.9.1        | Updated iOS SDK to 3.10.1 and Android SDK to 3.10.8
+| 2.9.0        | Updated iOS SDK to 3.10.0 and Android SDK to 3.10.7                <br/> Added Support for SPM
+| 2.8.4        | Updated iOS SDK to 3.8.4 and Android SDK to 3.10.6
 | 2.8.3        | Updated iOS SDK to 3.8.3 and Android SDK to 3.10.3
 | 2.8.2        | Updated Android SDK to 3.10.2
 | 2.8.1        | Updated iOS SDK to 3.8.2 and Android SDK to 3.10.1
@@ -69,3 +75,4 @@
 | 1.1.0-beta.2 | Ignored unwanted build files that were included in previous package                                                                                                                                                                                                                                                                                                  |
 | 1.1.0-beta.1 | Native Android SDK updated to 3.1.13-beta.1 which supports screen recording on Android.                                                                                                                                                                                                                                                                              |
 | 1.0.0        | This is the first version of UXCam package for Flutter.                                                                                                                                                                                                                                                                                                              |
+| | |
